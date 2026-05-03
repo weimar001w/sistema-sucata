@@ -737,24 +737,18 @@ REGRAS IMPORTANTES:
   async function interpretar(textoUsuario) {
     mostrarIndicador(true);
 
-    var mensagem = contextoAtual() + "\n\nComando do usuário: \"" + textoUsuario + "\"";
-
     try {
-      var response = await fetch("https://api.anthropic.com/v1/messages", {
+      var response = await fetch("https://sucata-servidor.onrender.com/mensagem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: mensagem }]
+          texto: textoUsuario,
+          contexto: contextoAtual()
         })
       });
 
       var data = await response.json();
-      var textoResposta = data.content && data.content[0] ? data.content[0].text : "";
-
-      // Remove possíveis blocos markdown
+      var textoResposta = data.resultado || "";
       textoResposta = textoResposta.replace(/```json|```/g, "").trim();
 
       var parsed = JSON.parse(textoResposta);
@@ -764,7 +758,7 @@ REGRAS IMPORTANTES:
     } catch(e) {
       mostrarIndicador(false);
       console.error("Erro na IA:", e);
-      return { acao: "naoEntendido", params: { motivo: "Erro de conexão com a IA." }, confirmacao: "Erro de conexão." };
+      return { acao: "naoEntendido", params: { motivo: "Erro de conexao." }, confirmacao: "Erro de conexao." };
     }
   }
 

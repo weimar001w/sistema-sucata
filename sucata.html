@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sucata</title>
+  <style>
+    #painelVoz {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: #1a1a2e;
+      color: #fff;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 999;
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.4);
+    }
+    #btnVoz {
+      background: #e94560;
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 48px; height: 48px;
+      font-size: 22px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    #btnVoz.escutando { background: #00b4d8; animation: pulsar 1s infinite alternate; }
+    @keyframes pulsar { from { box-shadow: 0 0 0 0 #00b4d855; } to { box-shadow: 0 0 0 10px #00b4d800; } }
+    #textoVoz { font-size: 13px; line-height: 1.4; flex: 1; min-width: 0; }
+    #textoVoz .label { font-size: 10px; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
+    #textoVoz .transcricao { color: #ffd166; word-break: break-word; }
+    #textoVoz .resposta { color: #06d6a0; word-break: break-word; }
+    #indicadorIA {
+      font-size: 10px;
+      color: #7c83fd;
+      font-style: italic;
+      display: none;
+    }
+    #indicadorIA.visivel { display: block; }
+    body { padding-bottom: 80px; }
+  </style>
+</head>
+<body>
+
+  <!-- TELA PRINCIPAL -->
+  <div id="telaPrincipal">
+    <h1>💰 Saldo: R$ <span id="saldo">0,00</span></h1>
+    <button onclick="ui_novoCliente()">Novo Cliente</button>
+    <button onclick="abrirCaixa()">💵 Caixa</button>
+    <button onclick="abrirPrecos()">🏷️ Preços</button>
+    <button onclick="abrirResumo()">📋 Fechar o Dia</button>
+    <button onclick="abrirHistorico()">📅 Histórico</button>
+    <h2>Clientes Abertos</h2>
+    <div id="lista"><p>Nenhum cliente ainda.</p></div>
+  </div>
+
+  <!-- TELA DO CLIENTE -->
+  <div id="telaCliente" style="display:none">
+    <button onclick="voltarInicio()">← Voltar</button>
+    <h2 id="nomeCliente"></h2>
+    <div id="avisoDivida"></div>
+    <p>Materiais:</p>
+    <div id="listaMateriais"><p>Nenhum material ainda.</p></div>
+    <button onclick="ui_adicionarMaterial()">+ Adicionar Material</button>
+    <h3 id="totalCliente">Total: R$ 0,00</h3>
+    <button onclick="ui_finalizarCliente()">✅ Finalizar e Pagar</button>
+    <button onclick="ui_apagarCliente()">🗑️ Apagar Cliente</button>
+  </div>
+
+  <!-- TELA DO CAIXA -->
+  <div id="telaCaixa" style="display:none">
+    <button onclick="voltarInicio()">← Voltar</button>
+    <h2>💵 Caixa</h2>
+    <h3>Saldo atual: R$ <span id="saldoCaixa">0,00</span></h3>
+    <p><b>Entradas:</b></p>
+    <button onclick="ui_adicionarEntradaDinheiro()">💵 Entrada de Dinheiro</button>
+    <button onclick="ui_adicionarVendaObjeto()">🛒 Venda de Objeto</button>
+    <button onclick="ui_adicionarVendaMaterial()">⚖️ Venda de Material</button>
+    <p><b>Saídas:</b></p>
+    <button onclick="ui_adicionarSaida()">- Saída</button>
+    <h3>Movimentações:</h3>
+    <div id="listaMovimentacoes"><p>Nenhuma movimentação ainda.</p></div>
+  </div>
+
+  <!-- TELA DE PREÇOS -->
+  <div id="telaPrecos" style="display:none">
+    <button onclick="voltarInicio()">← Voltar</button>
+    <h2>🏷️ Tabela de Preços</h2>
+    <div id="listaPrecos"></div>
+    <hr>
+    <h3>Adicionar novo material:</h3>
+    <input id="novoNome" placeholder="Nome do material" />
+    <input id="novoPreco" placeholder="Preço" type="number" min="0" step="0.01" />
+    <select id="novoTipo">
+      <option value="kg">Por kg</option>
+      <option value="un">Por unidade</option>
+    </select>
+    <button onclick="ui_adicionarNovoMaterial()">+ Adicionar</button>
+  </div>
+
+  <!-- TELA RESUMO DO DIA -->
+  <div id="telaResumo" style="display:none">
+    <button onclick="voltarInicio()">← Voltar</button>
+    <h2>📋 Resumo do Dia</h2>
+    <div id="conteudoResumo"></div>
+    <hr>
+    <button onclick="ui_encerrarDia()" style="background:red;color:white;padding:10px;font-size:16px">🔒 Encerrar o Dia</button>
+  </div>
+
+  <!-- TELA HISTÓRICO -->
+  <div id="telaHistorico" style="display:none">
+    <button onclick="voltarInicio()">← Voltar</button>
+    <h2>📅 Histórico</h2>
+    <button onclick="filtrarHistorico('dia')">📅 Dia</button>
+    <button onclick="filtrarHistorico('semana')">📅 Semana</button>
+    <button onclick="filtrarHistorico('mes')">📅 Mês</button>
+    <button onclick="filtrarHistorico('ano')">📅 Ano</button>
+    <div id="conteudoHistorico"></div>
+  </div>
+
+  <!-- PAINEL DE VOZ -->
+  <div id="painelVoz">
+    <button id="btnVoz" onclick="voz.alternarEscuta()" title="Ativar/desativar voz">🎤</button>
+    <div id="textoVoz">
+      <div class="label">Agente de voz <span id="indicadorIA">🤖 IA interpretando...</span></div>
+      <div class="transcricao" id="vozTranscricao">Pressione 🎤 para ativar</div>
+      <div class="resposta" id="vozResposta"></div>
+    </div>
+  </div>
+
+<script>
+
+// =============================================================================
+// ESTADO
+// =============================================================================
+
+var clientes           = [];
+var clienteAtual       = null;
+var saldo              = 0;
+var movimentacoes      = [];
+var historicoMateriais = {};
+var historicoClientes  = {};
+var totalVales         = 0;
+var totalComprado      = 0;
+var dividasClientes    = {};
+var historicoDias      = [];
+
+// Flag para confirmação pendente (ex: encerrar dia)
+var confirmacaoPendente = null;
+
+var precos = {
+  ferro:                { preco: 0.5,  unidade: "kg" },
+  plastico_colorido:    { preco: 0.5,  unidade: "kg" },
+  plastico_mole:        { preco: 0.5,  unidade: "kg" },
+  plastico_branco:      { preco: 0.8,  unidade: "kg" },
+  pp:                   { preco: 0.8,  unidade: "kg" },
+  pvc:                  { preco: 0.5,  unidade: "kg" },
+  latinha:              { preco: 7,    unidade: "kg" },
+  bloco_limpo:          { preco: 7,    unidade: "kg" },
+  bloco_sujo:           { preco: 5,    unidade: "kg" },
+  chaparia_de_aluminio: { preco: 5,    unidade: "kg" },
+  metal_sujo:           { preco: 10,   unidade: "kg" },
+  metal_limpo:          { preco: 13,   unidade: "kg" },
+  cobre_mel:            { preco: 35,   unidade: "kg" },
+  cobre_misto:          { preco: 30,   unidade: "kg" },
+  fio_grosso:           { preco: 9,    unidade: "kg" },
+  fio_fino:             { preco: 5,    unidade: "kg" },
+  senpertinha:          { preco: 19,   unidade: "kg" },
+  caixa:                { preco: 0.5,  unidade: "un" },
+  garrafa:              { preco: 0.25, unidade: "un" }
+};
+
+// =============================================================================
+// HELPERS
+// =============================================================================
+
+function numSeguro(valor) {
+  var n = Number(String(valor).replace(",", "."));
+  return isNaN(n) || !isFinite(n) ? 0 : n;
+}
+
+function arredondar(valor) {
+  return Math.round(valor * 100) / 100;
+}
+
+function formatarNomeMaterial(nome) {
+  return nome.toLowerCase().trim().replace(/\s+/g, "_");
+}
+
+// =============================================================================
+// PERSISTÊNCIA
+// =============================================================================
+
+function salvarDados() {
+  try {
+    localStorage.setItem("saldo",              JSON.stringify(saldo));
+    localStorage.setItem("movimentacoes",      JSON.stringify(movimentacoes));
+    localStorage.setItem("historicoMateriais", JSON.stringify(historicoMateriais));
+    localStorage.setItem("historicoClientes",  JSON.stringify(historicoClientes));
+    localStorage.setItem("dividasClientes",    JSON.stringify(dividasClientes));
+    localStorage.setItem("precos",             JSON.stringify(precos));
+    localStorage.setItem("totalVales",         JSON.stringify(totalVales));
+    localStorage.setItem("totalComprado",      JSON.stringify(totalComprado));
+    localStorage.setItem("historicoDias",      JSON.stringify(historicoDias));
+    localStorage.setItem("clientes",           JSON.stringify(clientes));
+  } catch(e) {
+    alert("Erro ao salvar dados.");
+  }
+}
+
+function carregarDados() {
+  try {
+    if (localStorage.getItem("saldo"))              saldo              = JSON.parse(localStorage.getItem("saldo"));
+    if (localStorage.getItem("movimentacoes"))      movimentacoes      = JSON.parse(localStorage.getItem("movimentacoes"));
+    if (localStorage.getItem("historicoMateriais")) historicoMateriais = JSON.parse(localStorage.getItem("historicoMateriais"));
+    if (localStorage.getItem("historicoClientes"))  historicoClientes  = JSON.parse(localStorage.getItem("historicoClientes"));
+    if (localStorage.getItem("dividasClientes"))    dividasClientes    = JSON.parse(localStorage.getItem("dividasClientes"));
+    if (localStorage.getItem("precos"))             precos             = JSON.parse(localStorage.getItem("precos"));
+    if (localStorage.getItem("totalVales"))         totalVales         = JSON.parse(localStorage.getItem("totalVales"));
+    if (localStorage.getItem("totalComprado"))      totalComprado      = JSON.parse(localStorage.getItem("totalComprado"));
+    if (localStorage.getItem("historicoDias"))      historicoDias      = JSON.parse(localStorage.getItem("historicoDias"));
+    if (localStorage.getItem("clientes"))           clientes           = JSON.parse(localStorage.getItem("clientes"));
+  } catch(e) {
+    alert("Erro ao carregar dados salvos.");
+  }
+  atualizarSaldo();
+  atualizarLista();
+}
+
+carregarDados();
+
+// =============================================================================
+// NAVEGAÇÃO
+// =============================================================================
+
+function esconderTelas() {
+  document.getElementById("telaPrincipal").style.display = "none";
+  document.getElementById("telaCliente").style.display   = "none";
+  document.getElementById("telaCaixa").style.display     = "none";
+  document.getElementById("telaPrecos").style.display    = "none";
+  document.getElementById("telaResumo").style.display    = "none";
+  document.getElementById("telaHistorico").style.display = "none";
+}
+
+function voltarInicio() {
+  esconderTelas();
+  document.getElementById("telaPrincipal").style.display = "block";
+  clienteAtual = null;
+  atualizarLista();
+  atualizarSaldo();
+}
+
+function abrirCaixa() {
+  esconderTelas();
+  document.getElementById("telaCaixa").style.display = "block";
+  atualizarCaixa();
+}
+
+function abrirPrecos() {
+  esconderTelas();
+  document.getElementById("telaPrecos").style.display = "block";
+  atualizarListaPrecos();
+}
+
+function abrirResumo() {
+  esconderTelas();
+  document.getElementById("telaResumo").style.display = "block";
+  gerarResumo();
+}
+
+function abrirHistorico() {
+  esconderTelas();
+  document.getElementById("telaHistorico").style.display = "block";
+  filtrarHistorico("dia");
+}
+
+// =============================================================================
+// LÓGICA PURA
+// =============================================================================
+
+function criarCliente(nome) {
+  if (!nome || nome.trim() === "") return { ok: false, msg: "Nome invalido." };
+  nome = nome.trim();
+  var jaExiste = clientes.find(function(c) { return c.nome.toLowerCase() === nome.toLowerCase(); });
+  if (jaExiste) return { ok: false, msg: "Ja existe um cliente aberto com o nome " + nome + "." };
+  clientes.push({ nome: nome, materiais: [] });
+  salvarDados();
+  atualizarLista();
+  return { ok: true, msg: "Cliente " + nome + " criado com sucesso." };
+}
+
+function apagarCliente(indice) {
+  if (indice === null || indice < 0 || indice >= clientes.length)
+    return { ok: false, msg: "Indice de cliente invalido." };
+  var nome = clientes[indice].nome;
+  clientes.splice(indice, 1);
+  salvarDados();
+  return { ok: true, msg: "Cliente " + nome + " apagado." };
+}
+
+function adicionarMaterialAoCliente(clienteIndex, nomeMaterial, quantidade) {
+  if (clienteIndex === null || clienteIndex < 0 || clienteIndex >= clientes.length)
+    return { ok: false, msg: "Indice de cliente invalido." };
+  var nomeFormatado = formatarNomeMaterial(nomeMaterial);
+  var material = precos[nomeFormatado];
+  if (!material)
+    return { ok: false, msg: "Material " + nomeFormatado + " nao encontrado na tabela de precos." };
+  var qtd = numSeguro(quantidade);
+  if (qtd <= 0) return { ok: false, msg: "Quantidade invalida. Use um numero maior que zero." };
+  var total = arredondar(qtd * material.preco);
+  clientes[clienteIndex].materiais.push({
+    nome: nomeFormatado, quantidade: qtd, unidade: material.unidade,
+    preco: material.preco, total: total
+  });
+  salvarDados();
+  atualizarMateriais();
+  return {
+    ok: true,
+    msg: "Adicionado " + nomeFormatado + ", " + qtd + " " + material.unidade + ", total R$ " + total.toFixed(2) + ".",
+    dados: { nome: nomeFormatado, quantidade: qtd, unidade: material.unidade, preco: material.preco, total: total }
+  };
+}
+
+function editarMaterialDoCliente(clienteIndex, materialIndex, novaQuantidade) {
+  if (clienteIndex === null || clienteIndex < 0 || clienteIndex >= clientes.length)
+    return { ok: false, msg: "Indice de cliente invalido." };
+  var materiais = clientes[clienteIndex].materiais;
+  if (materialIndex < 0 || materialIndex >= materiais.length)
+    return { ok: false, msg: "Indice de material invalido." };
+  var qtd = numSeguro(novaQuantidade);
+  if (qtd <= 0) return { ok: false, msg: "Quantidade invalida." };
+  var mat = materiais[materialIndex];
+  clientes[clienteIndex].materiais[materialIndex].quantidade = qtd;
+  clientes[clienteIndex].materiais[materialIndex].total      = arredondar(qtd * mat.preco);
+  salvarDados();
+  atualizarMateriais();
+  return { ok: true, msg: "Material atualizado para " + qtd + " " + mat.unidade + "." };
+}
+
+function apagarMaterialDoCliente(clienteIndex, materialIndex) {
+  if (clienteIndex === null || clienteIndex < 0 || clienteIndex >= clientes.length)
+    return { ok: false, msg: "Indice de cliente invalido." };
+  var materiais = clientes[clienteIndex].materiais;
+  if (materialIndex < 0 || materialIndex >= materiais.length)
+    return { ok: false, msg: "Indice de material invalido." };
+  clientes[clienteIndex].materiais.splice(materialIndex, 1);
+  salvarDados();
+  atualizarMateriais();
+  return { ok: true, msg: "Material removido." };
+}
+
+function finalizarClientePuro(clienteIndex, valorPago, descontarDivida) {
+  if (clienteIndex === null || clienteIndex < 0 || clienteIndex >= clientes.length)
+    return { ok: false, msg: "Indice de cliente invalido." };
+  var cliente = clientes[clienteIndex];
+  if (cliente.materiais.length === 0)
+    return { ok: false, msg: "Adicione pelo menos um material antes de finalizar." };
+
+  var total = 0;
+  cliente.materiais.forEach(function(mat) { total += mat.total; });
+  total = arredondar(total);
+
+  var nomeKey     = cliente.nome.toLowerCase();
+  var dividaAtual = dividasClientes[nomeKey] || 0;
+  var mensagemDivida = "";
+
+  if (dividaAtual > 0 && descontarDivida) {
+    total = arredondar(total - dividaAtual);
+    dividasClientes[nomeKey] = 0;
+    if (total < 0) {
+      var credito = Math.abs(total);
+      total = 0;
+      dividasClientes[nomeKey] = -credito;
+      mensagemDivida = "A divida era maior que o total. " + cliente.nome + " tem R$ " + credito.toFixed(2) + " de credito.";
+    }
+  }
+
+  var pagouNumero = numSeguro(valorPago);
+  if (pagouNumero < 0) return { ok: false, msg: "Valor pago invalido." };
+
+  var diferenca = arredondar(pagouNumero - total);
+  var mensagemPagamento = "";
+
+  if (diferenca > 0) {
+    dividasClientes[nomeKey] = (dividasClientes[nomeKey] || 0) + diferenca;
+    totalVales += diferenca;
+    mensagemPagamento = cliente.nome + " tem R$ " + diferenca.toFixed(2) + " de credito para a proxima vez.";
+  } else if (diferenca < 0) {
+    dividasClientes[nomeKey] = (dividasClientes[nomeKey] || 0) + diferenca;
+    mensagemPagamento = cliente.nome + " ainda deve R$ " + Math.abs(diferenca).toFixed(2) + ".";
+  } else {
+    mensagemPagamento = "Valor exato. Perfeito!";
+  }
+
+  if (!historicoClientes[nomeKey])
+    historicoClientes[nomeKey] = { nome: cliente.nome, visitas: 0 };
+  historicoClientes[nomeKey].visitas += 1;
+
+  cliente.materiais.forEach(function(mat) {
+    if (!historicoMateriais[mat.nome])
+      historicoMateriais[mat.nome] = { quantidade: 0, total: 0, unidade: mat.unidade };
+    historicoMateriais[mat.nome].quantidade = arredondar(historicoMateriais[mat.nome].quantidade + mat.quantidade);
+    historicoMateriais[mat.nome].total      = arredondar(historicoMateriais[mat.nome].total + mat.total);
+  });
+
+  totalComprado = arredondar(totalComprado + pagouNumero);
+  saldo         = arredondar(saldo - pagouNumero);
+
+  atualizarSaldo();
+  clientes.splice(clienteIndex, 1);
+  salvarDados();
+  atualizarLista();
+
+  return {
+    ok: true,
+    msg: [mensagemDivida, mensagemPagamento].filter(Boolean).join(" "),
+    dados: { total: total, valorPago: pagouNumero, diferenca: diferenca, dividaFinal: dividasClientes[nomeKey] || 0 }
+  };
+}
+
+function adicionarEntrada(valor, descricao, categoria) {
+  var valorNumero = numSeguro(valor);
+  if (valorNumero <= 0) return { ok: false, msg: "Valor invalido." };
+  if (!descricao || descricao.trim() === "") return { ok: false, msg: "Descricao invalida." };
+  var cat = categoria || "dinheiro";
+  saldo = arredondar(saldo + valorNumero);
+  movimentacoes.push({ tipo: "entrada", categoria: cat, descricao: descricao.trim(), valor: valorNumero });
+  atualizarCaixa();
+  atualizarSaldo();
+  salvarDados();
+  return { ok: true, msg: "Entrada de R$ " + valorNumero.toFixed(2) + " registrada. " + descricao.trim() + "." };
+}
+
+function adicionarSaida(valor, descricao) {
+  var valorNumero = numSeguro(valor);
+  if (valorNumero <= 0) return { ok: false, msg: "Valor invalido." };
+  if (!descricao || descricao.trim() === "") return { ok: false, msg: "Descricao invalida." };
+  saldo = arredondar(saldo - valorNumero);
+  movimentacoes.push({ tipo: "saida", categoria: "saida", descricao: descricao.trim(), valor: valorNumero });
+  atualizarCaixa();
+  atualizarSaldo();
+  salvarDados();
+  return { ok: true, msg: "Saida de R$ " + valorNumero.toFixed(2) + " registrada. " + descricao.trim() + "." };
+}
+
+function adicionarVendaObjeto(valor, descricao) {
+  return adicionarEntrada(valor, descricao, "objeto");
+}
+
+function adicionarVendaMaterial(valor, descricao, kg) {
+  var kgNumero = numSeguro(kg);
+  if (kgNumero <= 0) return { ok: false, msg: "Quantidade de kg invalida." };
+  return adicionarEntrada(valor, descricao.trim() + " (" + kgNumero + "kg)", "material");
+}
+
+function editarMovimentacao(indice, novoValor) {
+  if (indice < 0 || indice >= movimentacoes.length) return { ok: false, msg: "Indice invalido." };
+  var novoValorNumero = numSeguro(novoValor);
+  if (novoValorNumero <= 0) return { ok: false, msg: "Valor invalido." };
+  var mov = movimentacoes[indice];
+  saldo = mov.tipo === "entrada"
+    ? arredondar(saldo - mov.valor + novoValorNumero)
+    : arredondar(saldo + mov.valor - novoValorNumero);
+  movimentacoes[indice].valor = novoValorNumero;
+  atualizarCaixa();
+  atualizarSaldo();
+  salvarDados();
+  return { ok: true, msg: "Movimentacao atualizada para R$ " + novoValorNumero.toFixed(2) + "." };
+}
+
+function apagarMovimentacao(indice) {
+  if (indice < 0 || indice >= movimentacoes.length) return { ok: false, msg: "Indice invalido." };
+  var mov = movimentacoes[indice];
+  saldo = mov.tipo === "entrada" ? arredondar(saldo - mov.valor) : arredondar(saldo + mov.valor);
+  movimentacoes.splice(indice, 1);
+  atualizarCaixa();
+  atualizarSaldo();
+  salvarDados();
+  return { ok: true, msg: "Movimentacao removida." };
+}
+
+function adicionarNovoMaterial(nome, preco, tipo) {
+  var nomeFormatado = formatarNomeMaterial(nome);
+  if (!nomeFormatado) return { ok: false, msg: "Nome invalido." };
+  var precoNumero = numSeguro(preco);
+  if (precoNumero <= 0) return { ok: false, msg: "Preco invalido." };
+  if (precos[nomeFormatado]) return { ok: false, msg: "Material " + nomeFormatado + " ja existe." };
+  precos[nomeFormatado] = { preco: precoNumero, unidade: tipo || "kg" };
+  atualizarListaPrecos();
+  salvarDados();
+  return { ok: true, msg: "Material " + nomeFormatado + " adicionado com sucesso." };
+}
+
+function editarPreco(nome, novoPreco) {
+  if (!precos[nome]) return { ok: false, msg: "Material " + nome + " nao encontrado." };
+  var novoPrecoNumero = numSeguro(novoPreco);
+  if (novoPrecoNumero <= 0) return { ok: false, msg: "Preco invalido." };
+  precos[nome].preco = novoPrecoNumero;
+  atualizarListaPrecos();
+  salvarDados();
+  return { ok: true, msg: "Preco do " + nome + " atualizado para R$ " + novoPrecoNumero.toFixed(2) + "." };
+}
+
+function removerMaterial(nome) {
+  if (!precos[nome]) return { ok: false, msg: "Material " + nome + " nao encontrado." };
+  delete precos[nome];
+  atualizarListaPrecos();
+  salvarDados();
+  return { ok: true, msg: "Material " + nome + " removido." };
+}
+
+function encerrarDia() {
+  if (clientes.length > 0)
+    return { ok: false, msg: "Ainda tem " + clientes.length + " cliente(s) aberto(s). Finaliza todos antes." };
+
+  var totalEntradas = 0, totalSaidas = 0, totalVendaObjeto = 0, totalVendaMaterial = 0;
+  movimentacoes.forEach(function(mov) {
+    if (mov.tipo === "entrada") {
+      totalEntradas += mov.valor;
+      if (mov.categoria === "objeto")   totalVendaObjeto   += mov.valor;
+      if (mov.categoria === "material") totalVendaMaterial += mov.valor;
+    } else { totalSaidas += mov.valor; }
+  });
+
+  var hoje = new Date();
+  var dia = {
+    data: hoje.toLocaleDateString("pt-BR"), timestamp: hoje.getTime(),
+    saldoFinal: arredondar(saldo),
+    totalEntradas: arredondar(totalEntradas), totalSaidas: arredondar(totalSaidas),
+    totalVendaObjeto: arredondar(totalVendaObjeto), totalVendaMaterial: arredondar(totalVendaMaterial),
+    totalVales: arredondar(totalVales), totalComprado: arredondar(totalComprado),
+    materiais: JSON.parse(JSON.stringify(historicoMateriais)),
+    clientes:  JSON.parse(JSON.stringify(historicoClientes))
+  };
+  historicoDias.push(dia);
+
+  saldo = 0; clientes = []; movimentacoes = [];
+  historicoMateriais = {}; historicoClientes = {};
+  totalVales = 0; totalComprado = 0;
+
+  salvarDados();
+  atualizarSaldo();
+  atualizarLista();
+  return { ok: true, msg: "Dia encerrado. Tudo zerado. Dividas mantidas.", dados: dia };
+}
+
+// =============================================================================
+// MÓDULO VOZ
+// =============================================================================
+
+var voz = (function() {
+  var Reconhecimento = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var reconhecedor   = null;
+  var escutando      = false;
+  var pausado        = false;
+
+  function suportado() { return !!Reconhecimento; }
+
+  function falar(texto) {
+    if (!window.speechSynthesis) return;
+    pausado = true;
+    if (reconhecedor && escutando) { try { reconhecedor.stop(); } catch(e) {} }
+
+    speechSynthesis.cancel();
+    var utterance  = new SpeechSynthesisUtterance(texto);
+    utterance.lang  = "pt-BR";
+    utterance.rate  = 1.05;
+    utterance.pitch = 1;
+
+    var tentarVoz = function() {
+      var vozes    = speechSynthesis.getVoices();
+      var vozPtBR  = vozes.find(function(v) { return v.lang === "pt-BR"; })
+                  || vozes.find(function(v) { return v.lang.startsWith("pt"); });
+      if (vozPtBR) utterance.voice = vozPtBR;
+    };
+    tentarVoz();
+
+    utterance.onend = function() {
+      pausado = false;
+      if (escutando) { try { reconhecedor.start(); } catch(e) {} }
+    };
+    utterance.onerror = function() {
+      pausado = false;
+      if (escutando) { try { reconhecedor.start(); } catch(e) {} }
+    };
+
+    speechSynthesis.speak(utterance);
+    _exibirResposta(texto);
+  }
+
+  function iniciar() {
+    if (!suportado()) { alert("Seu navegador nao suporta reconhecimento de voz. Use Chrome."); return; }
+    if (escutando) return;
+
+    reconhecedor = new Reconhecimento();
+    reconhecedor.lang            = "pt-BR";
+    reconhecedor.continuous      = true;
+    reconhecedor.interimResults  = false;
+    reconhecedor.maxAlternatives = 1;
+
+    reconhecedor.onstart = function() {
+      escutando = true;
+      _atualizarBotao(true);
+      _exibirTranscricao("Ouvindo...");
+    };
+
+    reconhecedor.onresult = function(event) {
+      for (var i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          var texto = event.results[i][0].transcript.trim();
+          _exibirTranscricao('"' + texto + '"');
+          comandos.interpretar(texto);
+        }
+      }
+    };
+
+    reconhecedor.onerror = function(event) {
+      if (event.error === "not-allowed") { falar("Permissao de microfone negada."); parar(); }
+    };
+
+    reconhecedor.onend = function() {
+      if (escutando && !pausado) {
+        setTimeout(function() {
+          if (escutando && !pausado) { try { reconhecedor.start(); } catch(e) {} }
+        }, 200);
+      }
+    };
+
+    reconhecedor.start();
+  }
+
+  function parar() {
+    escutando = false;
+    pausado   = false;
+    if (reconhecedor) { try { reconhecedor.stop(); } catch(e) {} reconhecedor = null; }
+    _atualizarBotao(false);
+    _exibirTranscricao("Voz desativada.");
+    _exibirResposta("");
+  }
+
+  function alternarEscuta() { if (escutando) parar(); else iniciar(); }
+
+  function _atualizarBotao(ativo) {
+    var btn = document.getElementById("btnVoz");
+    if (!btn) return;
+    btn.textContent = ativo ? "🔴" : "🎤";
+    if (ativo) btn.classList.add("escutando"); else btn.classList.remove("escutando");
+  }
+  function _exibirTranscricao(texto) {
+    var el = document.getElementById("vozTranscricao");
+    if (el) el.textContent = texto;
+  }
+  function _exibirResposta(texto) {
+    var el = document.getElementById("vozResposta");
+    if (el) el.textContent = texto;
+  }
+
+  return { iniciar: iniciar, parar: parar, alternarEscuta: alternarEscuta, falar: falar, suportado: suportado };
+})();
+
+// =============================================================================
+// MÓDULO IA — interpreta linguagem natural via API Claude
+// =============================================================================
+
+var ia = (function() {
+
+  function mostrarIndicador(visivel) {
+    var el = document.getElementById("indicadorIA");
+    if (el) el.className = visivel ? "visivel" : "";
+  }
+
+  // Constrói contexto atual do sistema para o Claude entender o estado
+  function contextoAtual() {
+    var nomesClientes = clientes.map(function(c, i) {
+      return i + ": " + c.nome;
+    }).join(", ") || "nenhum";
+
+    var nomesMateriais = Object.keys(precos).join(", ");
+
+    var clienteAbertoInfo = "nenhum";
+    if (clienteAtual !== null && clientes[clienteAtual]) {
+      var c = clientes[clienteAtual];
+      var totalC = c.materiais.reduce(function(s,m){ return s+m.total; },0);
+      clienteAbertoInfo = c.nome + " (total atual: R$ " + arredondar(totalC).toFixed(2) + ")";
+    }
+
+    return (
+      "Estado atual do sistema:\n" +
+      "- Saldo do caixa: R$ " + saldo.toFixed(2) + "\n" +
+      "- Clientes abertos (indice: nome): " + nomesClientes + "\n" +
+      "- Cliente em tela agora: " + clienteAbertoInfo + " (indice: " + (clienteAtual !== null ? clienteAtual : "null") + ")\n" +
+      "- Materiais disponíveis na tabela: " + nomesMateriais + "\n" +
+      "- Confirmação pendente: " + (confirmacaoPendente ? confirmacaoPendente : "nenhuma")
+    );
+  }
+
+  var SYSTEM_PROMPT = `Você é o assistente de voz de um sistema de compra de sucata (ferro-velho).
+Seu trabalho é interpretar comandos de voz em português brasileiro (informal, com erros, sotaque regional) e retornar APENAS um JSON com a ação a executar.
+
+AÇÕES DISPONÍVEIS:
+- criarCliente: params: {nome}
+- abrirCliente: params: {nome}
+- apagarCliente: params: {nome}
+- listarClientes: params: {}
+- adicionarMaterial: params: {material, quantidade, clienteNome (opcional)}
+- finalizarCliente: params: {clienteNome (opcional), valorPago, descontarDivida (bool, default false)}
+- adicionarEntrada: params: {valor, descricao}
+- adicionarSaida: params: {valor, descricao}
+- adicionarVendaObjeto: params: {valor, descricao}
+- adicionarVendaMaterial: params: {valor, descricao, kg}
+- consultarSaldo: params: {}
+- consultarTotal: params: {clienteNome (opcional)}
+- consultarDivida: params: {clienteNome}
+- abrirCaixa: params: {}
+- abrirPrecos: params: {}
+- abrirResumo: params: {}
+- abrirHistorico: params: {}
+- voltarInicio: params: {}
+- encerrarDia: params: {}
+- confirmarEncerramento: params: {}
+- ajuda: params: {}
+- naoEntendido: params: {motivo}
+
+REGRAS IMPORTANTES:
+1. Retorne APENAS JSON válido, sem texto extra, sem markdown.
+2. Formato: {"acao": "nomeAcao", "params": {...}, "confirmacao": "frase curta confirmando o que entendeu (em pt-BR, máx 10 palavras)"}
+3. Para materiais, normalize o nome: "latinha" → "latinha", "cobre mel" → "cobre_mel", "plástico colorido" → "plastico_colorido", etc.
+4. Se o usuário falar "sim", "pode", "confirma", "tá bom" após uma confirmação pendente, use a ação correspondente.
+5. Entenda variações como: "cria um cliente chamado João", "quero registrar o João", "coloca 10 kg de ferro pro Pedro", "o João vai pagar 50 reais", "quanto tem no caixa", etc.
+6. Para quantidades, entenda números por extenso: "dez" = 10, "vinte e cinco" = 25, etc.
+7. Se não entender, use naoEntendido com o motivo.`;
+
+  async function interpretar(textoUsuario) {
+    mostrarIndicador(true);
+
+    var mensagem = contextoAtual() + "\n\nComando do usuário: \"" + textoUsuario + "\"";
+
+    try {
+      var response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          system: SYSTEM_PROMPT,
+          messages: [{ role: "user", content: mensagem }]
+        })
+      });
+
+      var data = await response.json();
+      var textoResposta = data.content && data.content[0] ? data.content[0].text : "";
+
+      // Remove possíveis blocos markdown
+      textoResposta = textoResposta.replace(/```json|```/g, "").trim();
+
+      var parsed = JSON.parse(textoResposta);
+      mostrarIndicador(false);
+      return parsed;
+
+    } catch(e) {
+      mostrarIndicador(false);
+      console.error("Erro na IA:", e);
+      return { acao: "naoEntendido", params: { motivo: "Erro de conexão com a IA." }, confirmacao: "Erro de conexão." };
+    }
+  }
+
+  return { interpretar: interpretar };
+})();
+
+// =============================================================================
+// MÓDULO COMANDOS — usa IA para interpretar, depois executa
+// =============================================================================
+
+var comandos = (function() {
+
+  // Helpers internos
+  function encontrarCliente(nomeTexto) {
+    if (!nomeTexto) return null;
+    var lower = nomeTexto.toLowerCase().trim();
+    var idx = -1;
+    for (var i = 0; i < clientes.length; i++) {
+      if (clientes[i].nome.toLowerCase() === lower) { idx = i; break; }
+    }
+    if (idx === -1) {
+      for (var j = 0; j < clientes.length; j++) {
+        if (clientes[j].nome.toLowerCase().indexOf(lower) !== -1) { idx = j; break; }
+      }
+    }
+    return idx !== -1 ? idx : null;
+  }
+
+  function resolverCliente(nomeTexto) {
+    if (nomeTexto && nomeTexto.trim() !== "") {
+      var idx = encontrarCliente(nomeTexto);
+      if (idx === null) return { idx: null, erro: "Nao encontrei o cliente " + nomeTexto + "." };
+      return { idx: idx };
+    }
+    if (clienteAtual !== null) return { idx: clienteAtual };
+    if (clientes.length === 1) return { idx: 0 };
+    return { idx: null, erro: "Qual cliente? Fala o nome." };
+  }
+
+  // Executa a ação retornada pela IA
+  function executar(parsed) {
+    var acao   = parsed.acao;
+    var params = parsed.params || {};
+
+    switch(acao) {
+
+      case "criarCliente": {
+        var r = criarCliente(params.nome);
+        voz.falar(r.msg);
+        break;
+      }
+
+      case "abrirCliente": {
+        var idx = encontrarCliente(params.nome);
+        if (idx === null) { voz.falar("Nao encontrei o cliente " + params.nome + "."); break; }
+        abrirCliente(idx);
+        voz.falar("Abrindo " + clientes[idx].nome + ".");
+        break;
+      }
+
+      case "apagarCliente": {
+        var idx = encontrarCliente(params.nome);
+        if (idx === null) { voz.falar("Nao encontrei o cliente " + params.nome + "."); break; }
+        var r = apagarCliente(idx);
+        if (clienteAtual === idx) { clienteAtual = null; voltarInicio(); }
+        voz.falar(r.msg);
+        break;
+      }
+
+      case "listarClientes": {
+        if (clientes.length === 0) { voz.falar("Nenhum cliente aberto."); break; }
+        var nomes = clientes.map(function(c) { return c.nome; }).join(", ");
+        voz.falar(clientes.length + " cliente(s) aberto(s): " + nomes + ".");
+        break;
+      }
+
+      case "adicionarMaterial": {
+        var res = resolverCliente(params.clienteNome);
+        if (res.idx === null) { voz.falar(res.erro); break; }
+        var r = adicionarMaterialAoCliente(res.idx, params.material, params.quantidade);
+        if (res.idx !== clienteAtual) abrirCliente(res.idx);
+        voz.falar(r.msg);
+        break;
+      }
+
+      case "finalizarCliente": {
+        var res = resolverCliente(params.clienteNome);
+        if (res.idx === null) { voz.falar(res.erro); break; }
+        var r = finalizarClientePuro(res.idx, params.valorPago, params.descontarDivida || false);
+        if (!r.ok) { voz.falar(r.msg); break; }
+        clienteAtual = null; voltarInicio(); voz.falar(r.msg);
+        break;
+      }
+
+      case "adicionarEntrada": {
+        var r = adicionarEntrada(params.valor, params.descricao, "dinheiro");
+        voz.falar(r.msg);
+        break;
+      }
+
+      case "adicionarSaida": {
+        var r = adicionarSaida(params.valor, params.descricao);
+        voz.falar(r.msg);
+        break;
+      }
+
+      case "adicionarVendaObjeto": {
+        var r = adicionarVendaObjeto(params.valor, params.descricao);
+        voz.falar(r.msg);
+        break;
+      }
+
+      case "adicionarVendaMaterial": {
+        var r = adicionarVendaMaterial(params.valor, params.descricao, params.kg);
+        voz.falar(r.msg);
+        break;
+      }
+
+      case "consultarSaldo": {
+        voz.falar("Saldo atual: R$ " + saldo.toFixed(2) + ".");
+        break;
+      }
+
+      case "consultarTotal": {
+        var res = resolverCliente(params.clienteNome);
+        if (res.idx === null) { voz.falar(res.erro); break; }
+        var c = clientes[res.idx];
+        var total = c.materiais.reduce(function(s, mt) { return s + mt.total; }, 0);
+        voz.falar("Total do " + c.nome + ": R$ " + arredondar(total).toFixed(2) + ".");
+        break;
+      }
+
+      case "consultarDivida": {
+        var nomeKey = (params.clienteNome || "").toLowerCase().trim();
+        var val = dividasClientes[nomeKey] || 0;
+        var nomeExibir = params.clienteNome || nomeKey;
+        if (val > 0)      voz.falar(nomeExibir + " deve R$ " + val.toFixed(2) + ".");
+        else if (val < 0) voz.falar(nomeExibir + " tem credito de R$ " + Math.abs(val).toFixed(2) + ".");
+        else              voz.falar(nomeExibir + " nao tem divida.");
+        break;
+      }
+
+      case "abrirCaixa":     abrirCaixa();     voz.falar("Abrindo o caixa.");     break;
+      case "abrirPrecos":    abrirPrecos();    voz.falar("Abrindo precos.");       break;
+      case "abrirResumo":    abrirResumo();    voz.falar("Abrindo resumo do dia."); break;
+      case "abrirHistorico": abrirHistorico(); voz.falar("Abrindo historico.");    break;
+      case "voltarInicio":   voltarInicio();   voz.falar("Tela principal.");       break;
+
+      case "encerrarDia": {
+        if (clientes.length > 0) {
+          voz.falar("Ainda tem " + clientes.length + " cliente(s) aberto(s). Finaliza todos antes.");
+          break;
+        }
+        confirmacaoPendente = "encerrarDia";
+        voz.falar("Confirma encerrar o dia? Fale: confirmar.");
+        break;
+      }
+
+      case "confirmarEncerramento": {
+        if (confirmacaoPendente === "encerrarDia") {
+          confirmacaoPendente = null;
+          var r = encerrarDia();
+          voltarInicio();
+          voz.falar(r.msg);
+        } else {
+          voz.falar("Nao ha nada para confirmar.");
+        }
+        break;
+      }
+
+      case "ajuda": {
+        voz.falar(
+          "Pode falar naturalmente. Exemplos: " +
+          "cria um cliente chamado Joao. " +
+          "adiciona dez quilos de ferro pro Joao. " +
+          "o Joao vai pagar cinquenta reais. " +
+          "quanto tem no caixa. " +
+          "registra uma saida de vinte reais combustivel."
+        );
+        break;
+      }
+
+      case "naoEntendido":
+      default: {
+        voz.falar("Nao entendi. Pode repetir de outro jeito?");
+        break;
+      }
+    }
+  }
+
+  async function interpretar(textoOriginal) {
+    if (!textoOriginal || textoOriginal.trim() === "") return;
+
+    // Tenta IA primeiro
+    var parsed = await ia.interpretar(textoOriginal);
+
+    // Executa a ação
+    executar(parsed);
+  }
+
+  return { interpretar: interpretar };
+})();
+
+// =============================================================================
+// CAMADA UI
+// =============================================================================
+
+function ui_novoCliente() {
+  var nome = prompt("Nome do cliente:");
+  if (!nome || nome.trim() === "") return;
+  var r = criarCliente(nome);
+  if (!r.ok) {
+    var novoNome = prompt("⚠️ " + r.msg + "\nDigita um apelido:");
+    if (!novoNome || novoNome.trim() === "") return;
+    var r2 = criarCliente(novoNome);
+    if (!r2.ok) alert("⚠️ " + r2.msg);
+  }
+}
+
+function ui_apagarCliente() {
+  if (clienteAtual === null) return;
+  var nome = clientes[clienteAtual].nome;
+  if (!confirm("Apagar o cliente \"" + nome + "\"? Os materiais serão perdidos.")) return;
+  var r = apagarCliente(clienteAtual);
+  if (!r.ok) { alert("⚠️ " + r.msg); return; }
+  clienteAtual = null;
+  voltarInicio();
+}
+
+function ui_adicionarMaterial() {
+  if (clienteAtual === null) return;
+  var nome = prompt("Material (ex: ferro, latinha):");
+  if (!nome || nome.trim() === "") return;
+  var nomeFormatado = formatarNomeMaterial(nome);
+  var material = precos[nomeFormatado];
+  if (!material) { alert("Material \"" + nomeFormatado + "\" não encontrado!"); return; }
+  var label = material.unidade === "un" ? "Quantas unidades?" : "Quantos kg?";
+  var quantidade = prompt(label);
+  if (!quantidade || quantidade.trim() === "") return;
+  var r = adicionarMaterialAoCliente(clienteAtual, nome, quantidade);
+  if (!r.ok) alert("⚠️ " + r.msg);
+}
+
+function ui_finalizarCliente() {
+  if (clienteAtual === null) return;
+  var cliente = clientes[clienteAtual];
+  if (cliente.materiais.length === 0) { alert("Adiciona pelo menos um material!"); return; }
+
+  var total = arredondar(cliente.materiais.reduce(function(s, m) { return s + m.total; }, 0));
+  var nomeKey     = cliente.nome.toLowerCase();
+  var dividaAtual = dividasClientes[nomeKey] || 0;
+  var descontarDivida = false;
+  if (dividaAtual > 0)
+    descontarDivida = confirm(cliente.nome + " tem R$ " + dividaAtual.toFixed(2) + " de dívida.\nDescontar do valor de hoje?");
+
+  var totalExibido = descontarDivida ? Math.max(0, arredondar(total - dividaAtual)) : total;
+  var pagou = prompt("Total do " + cliente.nome + " é R$ " + totalExibido.toFixed(2) + "\n\nQuanto você pagou?");
+  if (!pagou || pagou.trim() === "") return;
+
+  var pagouNumero = numSeguro(pagou);
+  if (pagouNumero < 0) { alert("Valor inválido!"); return; }
+
+  var r = finalizarClientePuro(clienteAtual, pagouNumero, descontarDivida);
+  if (!r.ok) { alert("⚠️ " + r.msg); return; }
+
+  clienteAtual = null;
+  var prefixo = r.dados.diferenca > 0 ? "✅ Pago!\n\n" : r.dados.diferenca < 0 ? "✅ Pago parcialmente!\n\n" : "✅ Pago! Valor exato!\n";
+  alert(prefixo + r.msg);
+  voltarInicio();
+}
+
+function ui_adicionarEntradaDinheiro() {
+  var desc  = prompt("Descrição:"); if (!desc || !desc.trim()) return;
+  var valor = prompt("Quanto entrou em R$?"); if (!valor || !valor.trim()) return;
+  var r = adicionarEntrada(valor, desc, "dinheiro");
+  if (!r.ok) alert("⚠️ " + r.msg);
+}
+
+function ui_adicionarVendaObjeto() {
+  var desc  = prompt("O que vendeu?"); if (!desc || !desc.trim()) return;
+  var valor = prompt("Por quanto em R$?"); if (!valor || !valor.trim()) return;
+  var r = adicionarVendaObjeto(valor, desc);
+  if (!r.ok) alert("⚠️ " + r.msg);
+}
+
+function ui_adicionarVendaMaterial() {
+  var desc  = prompt("Qual material?"); if (!desc || !desc.trim()) return;
+  var kg    = prompt("Quantos kg?"); if (!kg || !kg.trim()) return;
+  var valor = prompt("Por quanto em R$?"); if (!valor || !valor.trim()) return;
+  var r = adicionarVendaMaterial(valor, desc, kg);
+  if (!r.ok) alert("⚠️ " + r.msg);
+}
+
+function ui_adicionarSaida() {
+  var desc  = prompt("O que saiu?"); if (!desc || !desc.trim()) return;
+  var valor = prompt("Quanto saiu em R$?"); if (!valor || !valor.trim()) return;
+  var r = adicionarSaida(valor, desc);
+  if (!r.ok) alert("⚠️ " + r.msg);
+}
+
+function ui_editarMovimentacao(indice) {
+  var mov = movimentacoes[indice];
+  var novoValor = prompt("Valor atual: R$ " + mov.valor.toFixed(2) + "\nDigita o valor correto:");
+  if (!novoValor || !novoValor.trim()) return;
+  var r = editarMovimentacao(indice, novoValor);
+  if (!r.ok) alert("⚠️ " + r.msg);
+}
+
+function ui_apagarMovimentacao(indice) {
+  if (!confirm("Apagar essa movimentação?")) return;
+  var r = apagarMovimentacao(indice);
+  if (!r.ok) alert("⚠️ " + r.msg);
+}
+
+function ui_adicionarNovoMaterial() {
+  var nome  = document.getElementById("novoNome").value;
+  var preco = document.getElementById("novoPreco").value;
+  var tipo  = document.getElementById("novoTipo").value;
+  var r = adicionarNovoMaterial(nome, preco, tipo);
+  if (!r.ok) { alert("⚠️ " + r.msg); return; }
+  document.getElementById("novoNome").value  = "";
+  document.getElementById("novoPreco").value = "";
+  alert("✅ " + r.msg);
+}
+
+function ui_editarPreco(nome) {
+  if (!precos[nome]) { alert("Material não encontrado!"); return; }
+  var novoPreco = prompt("Novo preço do " + nome + " (atual: R$ " + precos[nome].preco.toFixed(2) + "/" + precos[nome].unidade + "):");
+  if (!novoPreco || !novoPreco.trim()) return;
+  var r = editarPreco(nome, novoPreco);
+  if (!r.ok) { alert("⚠️ " + r.msg); return; }
+  alert("✅ " + r.msg);
+}
+
+function ui_removerMaterial(nome) {
+  if (!confirm("Remover \"" + nome + "\" da tabela de preços?")) return;
+  var r = removerMaterial(nome);
+  if (!r.ok) alert("⚠️ " + r.msg);
+}
+
+var ui_encerrarDia = function() {
+  if (clientes.length > 0) { alert("⚠️ Ainda tem " + clientes.length + " cliente(s) aberto(s)!"); return; }
+  if (!confirm("Tem certeza que quer encerrar o dia?\nTUDO será zerado.\nSó as dívidas ficam.")) return;
+  var r = encerrarDia();
+  if (!r.ok) { alert("⚠️ " + r.msg); return; }
+  voltarInicio();
+  alert("✅ Dia encerrado! Tudo zerado. Dívidas mantidas.");
+};
+
+// =============================================================================
+// RENDERIZAÇÃO
+// =============================================================================
+
+function atualizarSaldo() {
+  document.getElementById("saldo").innerText = saldo.toFixed(2);
+}
+
+function atualizarLista() {
+  var lista = document.getElementById("lista");
+  if (clientes.length === 0) { lista.innerHTML = "<p>Nenhum cliente ainda.</p>"; return; }
+  lista.innerHTML = "";
+  clientes.forEach(function(cliente, indice) {
+    var nomeKey = cliente.nome.toLowerCase();
+    var divida  = dividasClientes[nomeKey];
+    var aviso   = divida && divida > 0 ? " ⚠️ deve R$ " + divida.toFixed(2) : "";
+    lista.innerHTML += "<p>👤 <button onclick='abrirCliente(" + indice + ")'>" + cliente.nome + aviso + "</button></p>";
+  });
+}
+
+function abrirCliente(indice) {
+  if (indice < 0 || indice >= clientes.length) { alert("⚠️ Cliente não encontrado."); atualizarLista(); return; }
+  clienteAtual = indice;
+  esconderTelas();
+  document.getElementById("telaCliente").style.display = "block";
+  document.getElementById("nomeCliente").innerText = clientes[indice].nome;
+  var nomeKey = clientes[indice].nome.toLowerCase();
+  var divida  = dividasClientes[nomeKey];
+  var aviso   = document.getElementById("avisoDivida");
+  aviso.innerHTML = divida && divida > 0
+    ? "<p style='color:orange'>⚠️ " + clientes[indice].nome + " tem R$ " + divida.toFixed(2) + " de dívida!</p>"
+    : "";
+  atualizarMateriais();
+}
+
+function atualizarMateriais() {
+  if (clienteAtual === null) return;
+  var lista   = document.getElementById("listaMateriais");
+  var cliente = clientes[clienteAtual];
+  if (cliente.materiais.length === 0) {
+    lista.innerHTML = "<p>Nenhum material ainda.</p>";
+    document.getElementById("totalCliente").innerText = "Total: R$ 0,00";
+    return;
+  }
+  var total = 0;
+  lista.innerHTML = "";
+  cliente.materiais.forEach(function(mat, indice) {
+    lista.innerHTML +=
+      "<p>" + mat.nome + " - " + mat.quantidade + " " + mat.unidade +
+      " × R$ " + mat.preco.toFixed(2) + " = R$ " + mat.total.toFixed(2) +
+      " <button onclick='ui_editarMaterial(" + indice + ")'>✏️</button>" +
+      " <button onclick='ui_apagarMaterial(" + indice + ")'>🗑️</button></p>";
+    total += mat.total;
+  });
+  document.getElementById("totalCliente").innerText = "Total: R$ " + arredondar(total).toFixed(2);
+}
+
+function ui_editarMaterial(indice) {
+  if (clienteAtual === null) return;
+  var mat = clientes[clienteAtual].materiais[indice];
+  var novaQtd = prompt("Quantidade atual: " + mat.quantidade + " " + mat.unidade + "\nDigita a quantidade correta:");
+  if (!novaQtd || !novaQtd.trim()) return;
+  var r = editarMaterialDoCliente(clienteAtual, indice, novaQtd);
+  if (!r.ok) alert("⚠️ " + r.msg);
+}
+
+function ui_apagarMaterial(indice) {
+  if (clienteAtual === null) return;
+  var r = apagarMaterialDoCliente(clienteAtual, indice);
+  if (!r.ok) alert("⚠️ " + r.msg);
+}
+
+function atualizarCaixa() {
+  document.getElementById("saldoCaixa").innerText = saldo.toFixed(2);
+  var lista = document.getElementById("listaMovimentacoes");
+  if (movimentacoes.length === 0) { lista.innerHTML = "<p>Nenhuma movimentação ainda.</p>"; return; }
+  lista.innerHTML = "";
+  movimentacoes.forEach(function(mov, indice) {
+    var sinal = mov.tipo === "entrada" ? "+" : "-";
+    var cor   = mov.tipo === "entrada" ? "green" : "red";
+    var icone = mov.categoria === "objeto" ? "🛒"
+              : mov.categoria === "material" ? "⚖️"
+              : mov.categoria === "saida" ? "💸" : "💵";
+    lista.innerHTML +=
+      "<p style='color:" + cor + "'>" + icone + " " + sinal + " R$ " + mov.valor.toFixed(2) + " — " + mov.descricao +
+      " <button onclick='ui_editarMovimentacao(" + indice + ")'>✏️</button>" +
+      " <button onclick='ui_apagarMovimentacao(" + indice + ")'>🗑️</button></p>";
+  });
+}
+
+function atualizarListaPrecos() {
+  var lista = document.getElementById("listaPrecos");
+  var nomes = Object.keys(precos);
+  if (nomes.length === 0) { lista.innerHTML = "<p>Nenhum material cadastrado.</p>"; return; }
+  lista.innerHTML = "";
+  nomes.forEach(function(nome) {
+    var m = precos[nome];
+    lista.innerHTML +=
+      "<p>" + nome + " — R$ " + m.preco.toFixed(2) + "/" + m.unidade +
+      " <button onclick='ui_editarPreco(\"" + nome + "\")'>✏️ Editar</button>" +
+      " <button onclick='ui_removerMaterial(\"" + nome + "\")'>🗑️ Remover</button></p>";
+  });
+}
+
+// =============================================================================
+// RESUMO DO DIA
+// =============================================================================
+
+function gerarResumo() {
+  var conteudo = document.getElementById("conteudoResumo");
+  var totalEntradas = 0, totalSaidas = 0, totalVendaObjeto = 0, totalVendaMaterial = 0;
+  movimentacoes.forEach(function(mov) {
+    if (mov.tipo === "entrada") {
+      totalEntradas += mov.valor;
+      if (mov.categoria === "objeto")   totalVendaObjeto   += mov.valor;
+      if (mov.categoria === "material") totalVendaMaterial += mov.valor;
+    } else { totalSaidas += mov.valor; }
+  });
+  var totalDinheiro  = arredondar(totalEntradas - totalVendaObjeto - totalVendaMaterial);
+  totalEntradas      = arredondar(totalEntradas);
+  totalSaidas        = arredondar(totalSaidas);
+  totalVendaObjeto   = arredondar(totalVendaObjeto);
+  totalVendaMaterial = arredondar(totalVendaMaterial);
+
+  var html = "";
+  if (clientes.length > 0) html += "<p style='color:orange'>⚠️ Ainda tem " + clientes.length + " cliente(s) em aberto!</p>";
+  html += "<h3>👥 Clientes Atendidos</h3>";
+  var totalCA = Object.keys(historicoClientes).length;
+  if (totalCA === 0) { html += "<p>Nenhum cliente atendido ainda.</p>"; }
+  else {
+    html += "<p><b>Total: " + totalCA + " cliente(s)</b></p>";
+    for (var k in historicoClientes) {
+      var c = historicoClientes[k];
+      html += "<p>👤 " + c.nome + " — " + c.visitas + (c.visitas > 1 ? " vezes" : " vez") + "</p>";
+    }
+  }
+  html += "<hr><h3>📦 Materiais Comprados</h3>";
+  if (Object.keys(historicoMateriais).length === 0) { html += "<p>Nenhum material comprado hoje.</p>"; }
+  else {
+    var tgm = 0;
+    for (var mat in historicoMateriais) {
+      var m = historicoMateriais[mat];
+      html += "<p>" + mat + ": " + m.quantidade.toFixed(2) + " " + m.unidade + " — R$ " + m.total.toFixed(2) + "</p>";
+      tgm += m.total;
+    }
+    html += "<p><b>Total comprado: R$ " + arredondar(tgm).toFixed(2) + "</b></p>";
+  }
+  html += "<hr><h3>💵 Entradas</h3>";
+  html += "<p style='color:green'>💵 Dinheiro: R$ " + totalDinheiro.toFixed(2) + "</p>";
+  html += "<p style='color:green'>🛒 Venda de objetos: R$ " + totalVendaObjeto.toFixed(2) + "</p>";
+  html += "<p style='color:green'>⚖️ Venda de material: R$ " + totalVendaMaterial.toFixed(2) + "</p>";
+  html += "<p><b>Total entradas: R$ " + totalEntradas.toFixed(2) + "</b></p>";
+  html += "<hr><h3>💸 Saídas</h3>";
+  html += "<p style='color:red'>- Gastos: R$ " + totalSaidas.toFixed(2) + "</p>";
+  html += "<p style='color:orange'>- Vales/créditos: R$ " + arredondar(totalVales).toFixed(2) + "</p>";
+  html += "<p><b>Total saídas: R$ " + arredondar(totalSaidas + totalVales).toFixed(2) + "</b></p>";
+  html += "<hr><h3>💰 Saldo Final: R$ " + saldo.toFixed(2) + "</h3>";
+  html += "<hr><h3>⚠️ Dívidas e Créditos</h3>";
+  var temDiv = false, temCred = false;
+  for (var nome in dividasClientes) {
+    var val = dividasClientes[nome];
+    if (val > 0) { html += "<p style='color:orange'>⚠️ " + nome + " deve: R$ " + val.toFixed(2) + "</p>"; temDiv = true; }
+    else if (val < 0) { html += "<p style='color:blue'>💳 " + nome + " tem crédito: R$ " + Math.abs(val).toFixed(2) + "</p>"; temCred = true; }
+  }
+  if (!temDiv && !temCred) html += "<p>Nenhuma dívida ou crédito pendente.</p>";
+  conteudo.innerHTML = html;
+}
+
+// =============================================================================
+// HISTÓRICO
+// =============================================================================
+
+function filtrarHistorico(periodo) {
+  var conteudo = document.getElementById("conteudoHistorico");
+  var agora    = new Date();
+  var diasFiltrados = historicoDias.filter(function(dia) {
+    var dataDia = new Date(dia.timestamp);
+    if (periodo === "dia") {
+      return dataDia.getFullYear() === agora.getFullYear() &&
+             dataDia.getMonth()    === agora.getMonth() &&
+             dataDia.getDate()     === agora.getDate();
+    } else if (periodo === "semana") {
+      return (agora - dataDia) / (1000*60*60*24) <= 7;
+    } else if (periodo === "mes") {
+      return dataDia.getFullYear() === agora.getFullYear() && dataDia.getMonth() === agora.getMonth();
+    } else if (periodo === "ano") {
+      return dataDia.getFullYear() === agora.getFullYear();
+    }
+    return false;
+  });
+
+  if (diasFiltrados.length === 0) { conteudo.innerHTML = "<p>Nenhum dado encontrado para esse período.</p>"; return; }
+
+  var totalEP = 0, totalSP = 0, matP = {};
+  var html = "";
+
+  diasFiltrados.forEach(function(dia) {
+    totalEP += dia.totalEntradas; totalSP += dia.totalSaidas;
+    for (var mat in dia.materiais) {
+      if (!matP[mat]) matP[mat] = { quantidade: 0, total: 0, unidade: dia.materiais[mat].unidade };
+      matP[mat].quantidade = arredondar(matP[mat].quantidade + dia.materiais[mat].quantidade);
+      matP[mat].total      = arredondar(matP[mat].total      + dia.materiais[mat].total);
+    }
+    html += "<hr><p><b>📅 " + dia.data + "</b></p>";
+    if (dia.clientes && Object.keys(dia.clientes).length > 0) {
+      var nomes = [];
+      for (var kk in dia.clientes) nomes.push(dia.clientes[kk].nome + " (" + dia.clientes[kk].visitas + "x)");
+      html += "<p>👥 " + Object.keys(dia.clientes).length + " cliente(s): " + nomes.join(", ") + "</p>";
+    } else { html += "<p>👥 Nenhum cliente atendido.</p>"; }
+    html += "<p style='color:green'>+ Entradas: R$ " + dia.totalEntradas.toFixed(2) + "</p>";
+    html += "<p style='color:red'>- Saídas: R$ " + dia.totalSaidas.toFixed(2) + "</p>";
+    html += "<p style='color:orange'>- Vales: R$ " + (dia.totalVales || 0).toFixed(2) + "</p>";
+    html += "<p><b>Saldo do dia: R$ " + dia.saldoFinal.toFixed(2) + "</b></p>";
+  });
+
+  html += "<hr><h3>📊 Total do período</h3>";
+  html += "<p style='color:green'>+ Entradas: R$ " + arredondar(totalEP).toFixed(2) + "</p>";
+  html += "<p style='color:red'>- Saídas: R$ " + arredondar(totalSP).toFixed(2) + "</p>";
+  html += "<p><b>Lucro: R$ " + arredondar(totalEP - totalSP).toFixed(2) + "</b></p>";
+  html += "<h3>📦 Materiais do período</h3>";
+  var temMat = false;
+  for (var matNome in matP) {
+    html += "<p>" + matNome + ": " + matP[matNome].quantidade.toFixed(2) + " " + matP[matNome].unidade + " — R$ " + matP[matNome].total.toFixed(2) + "</p>";
+    temMat = true;
+  }
+  if (!temMat) html += "<p>Nenhum material nesse período.</p>";
+  conteudo.innerHTML = html;
+}
+
+</script>
+</body>
+</html>
